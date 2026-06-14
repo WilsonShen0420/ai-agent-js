@@ -29,6 +29,22 @@ export async function addMessage(content, role = "user") {
   await db.write();
 }
 
+// function calling 需要把帶有 tool_calls 的 assistant 訊息、
+// 以及 role 為 "tool" 的工具回傳結果，原樣存進對話歷史。
+export async function addRawMessage(message) {
+  db.data.messages.push(message);
+  await db.write();
+}
+
+export async function addToolResult(toolCallId, content) {
+  db.data.messages.push({
+    role: "tool",
+    tool_call_id: toolCallId,
+    content,
+  });
+  await db.write();
+}
+
 export function getMessages() {
   return db.data.messages;
 }

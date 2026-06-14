@@ -1,35 +1,16 @@
 import { z } from "zod";
 import { defineTool } from "../utils/func-tool.js";
 
+// 台北市 YouBike 2.0 即時資訊（台北市開放資料，不需 API Key）。
 const YOUBIKE_API =
   "https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json";
 
-function haversine(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const toRad = (deg) => (deg * Math.PI) / 180;
-
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
-
-async function getNearbyYoubike({
-  lat,
-  lon,
-  radius = 500,
-  available_amount = 0,
-  limit = 3,
-}) {
-  const res = await fetch(YOUBIKE_API);
-  const data = await res.json();
-
-  return data
-    .filter((s) => s.act === "1")
+// 依「行政區名稱」篩選站點（區域查詢版，不做經緯度或距離計算）。
+// 抽成純函式以利離線測試。
+export function filterStationsByArea(data, { area, available_amount = 0, limit = 5 }) {
+  const stations = data
+    .filter((s) => s.act === "1") // 只取營運中的站點
+    .filter((s) => s.sarea === area) // 比對行政區名稱
     .map((s) => ({
       name: s.sna.replace(/^YouBike2\.0_/, ""),
       area: s.sarea,
@@ -37,30 +18,42 @@ async function getNearbyYoubike({
       available_rent: s.available_rent_bikes,
       available_return: s.available_return_bikes,
       total: s.Quantity,
-      distance: Math.round(haversine(lat, lon, s.latitude, s.longitude)),
     }))
-    .filter(
-      (s) => s.distance <= radius && s.available_rent >= available_amount,
-    )
-    .sort((a, b) => a.distance - b.distance)
+    .filter((s) => s.available_rent >= available_amount)
+    .sort((a, b) => b.available_rent - a.available_rent)
     .slice(0, limit);
+
+  if (stations.length === 0) {
+    return {
+      error: `在「${area}」找不到符合條件的 YouBike 站點。請確認是否為台北市的行政區名稱（例如 大安區、信義區），「台北市」這種市名查不到資料。`,
+    };
+  }
+
+  return stations;
+}
+
+async function getYoubikeByArea(args) {
+  const res = await fetch(YOUBIKE_API);
+  if (!res.ok) {
+    return { error: `YouBike API error: ${res.status}` };
+  }
+  const data = await res.json();
+  return filterStationsByArea(data, args);
 }
 
 export const youbikeTool = defineTool({
-  name: "get_nearby_youbike",
-  description: "取得指定經緯度座標附近可租借的 YouBike 站點",
-  fn: getNearbyYoubike,
+  name: "get_youbike_by_area",
+  description:
+    "查詢台北市指定行政區目前可借的 YouBike 站點。只接受台北市的行政區名稱（如 大安區、信義區），不接受「台北市」這類市名。",
+  fn: getYoubikeByArea,
   parameters: z.object({
-    lat: z.number().describe("緯度"),
-    lon: z.number().describe("經度"),
-    radius: z
-      .number()
-      .default(500)
-      .describe("搜尋半徑（公尺），預設 500"),
+    area: z
+      .string()
+      .describe("台北市行政區名稱，例如 大安區、信義區、中正區"),
     available_amount: z
       .number()
       .default(0)
-      .describe("至少可租借車輛數，預設 0"),
-    limit: z.number().default(3).describe("回傳筆數上限，預設 3"),
+      .describe("至少可借車輛數，預設 0"),
+    limit: z.number().default(5).describe("回傳站點數上限，預設 5"),
   }),
 });

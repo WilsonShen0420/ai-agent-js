@@ -1,4 +1,5 @@
 import { input } from "@inquirer/prompts";
+import ora from "ora";
 import OpenAI from "openai";
 import { OPENAI_API_KEY } from "./config.js";
 import {
@@ -107,13 +108,18 @@ try {
 
     // 對話迴圈：若 LLM 要求呼叫工具，就執行後把結果回傳，直到產生最終回覆。
     while (true) {
-      const response = await client.chat.completions.create({
-        model: "gpt-5-mini",
-        messages: getMessages(),
-        tools,
-      });
-
-      const message = response.choices[0].message;
+      const spinner = ora("星語正在聆聽星空…").start();
+      let message;
+      try {
+        const response = await client.chat.completions.create({
+          model: "gpt-5-mini",
+          messages: getMessages(),
+          tools,
+        });
+        message = response.choices[0].message;
+      } finally {
+        spinner.stop();
+      }
 
       if (message.tool_calls?.length) {
         await addRawMessage(message);

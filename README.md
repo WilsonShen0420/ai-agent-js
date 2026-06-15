@@ -84,7 +84,7 @@ npm test
 70 公斤約等於 154.3234 磅。
 ```
 實際查詢結果：
-```
-<img width="709" height="576" alt="hw2" src="https://github.com/user-attachments/assets/86ae80d9-f878-4e39-8a3a-0b523752b821" />
 
-```
+![hw2 image](./images/hw2.png)
+
+

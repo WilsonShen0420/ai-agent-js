@@ -62,7 +62,7 @@ npm test
 
 ## 四、對話紀錄
 
-> ⚠️ 以下對話需在本機填入 `OPENAI_API_KEY` 後執行 `npm start` 產生，請以實際執行結果／截圖替換。
+查詢範例：
 
 ```
 請輸入：25 度 C 是華氏幾度？
@@ -83,7 +83,8 @@ npm test
 
 70 公斤約等於 154.3234 磅。
 ```
-
+實際查詢結果：
 ```
-（在此貼上實際執行的對話內容或截圖）
+<img width="709" height="576" alt="hw2" src="https://github.com/user-attachments/assets/86ae80d9-f878-4e39-8a3a-0b523752b821" />
+
 ```

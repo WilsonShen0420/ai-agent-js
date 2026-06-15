@@ -1,42 +1,46 @@
-import { input } from "@inquirer/prompts";
-import OpenAI from "openai";
-import { OPENAI_API_KEY } from "./config.js";
-import { initMessage, addMessage, getMessages } from "./db/messages.js";
+// 向量相似度實驗：把每組句子做 embedding，計算組內兩兩的餘弦相似度並輸出。
+import { embedBatch } from "./lib/embeddings.js";
+import { cosineSimilarity } from "./lib/similarity.js";
+import { SENTENCE_GROUPS } from "./data/sentence-groups.js";
+import { spinner } from "./utils/spinner.js";
 
-const client = new OpenAI({ apiKey: OPENAI_API_KEY });
-
-await initMessage(
-  "你是一位專門講關於貓的笑話大師，請用繁體中文回答。請用幽默有趣的方式回應。"
-);
-
-try {
-  while (true) {
-    const userQuestion = (
-      await input({ message: "請輸入你的問題：" })
-    ).trim();
-
-    if (userQuestion === "") continue;
-    if (userQuestion.toLowerCase() === "exit") {
-      console.log("再會~");
-      break;
+// 產生一組句子的兩兩配對索引：(0,1) (0,2) (1,2) ...
+function pairs(n) {
+  const result = [];
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      result.push([i, j]);
     }
-
-    await addMessage(userQuestion);
-
-    const response = await client.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: getMessages(),
-    });
-
-    const content = response.choices[0].message.content;
-    console.log(content);
-
-    await addMessage(content, "assistant");
   }
-} catch (err) {
-  if (err.name === "ExitPromptError") {
-    console.log("\n再會~");
-  } else {
-    throw err;
-  }
+  return result;
 }
+
+async function main() {
+  const spin = spinner("呼叫 Embeddings API 取得向量中...").start();
+  let groupVectors;
+  try {
+    // 把所有句子攤平、一次批次 embedding，再依組別切回去。
+    groupVectors = await Promise.all(
+      SENTENCE_GROUPS.map((g) => embedBatch(g.sentences)),
+    );
+  } finally {
+    spin.stop();
+  }
+
+  for (const [g, group] of SENTENCE_GROUPS.entries()) {
+    const vectors = groupVectors[g];
+    console.log(`\n${group.name}`);
+    group.sentences.forEach((s, i) => console.log(`  (${i + 1}) ${s}`));
+    console.log("  兩兩相似度：");
+    for (const [i, j] of pairs(group.sentences.length)) {
+      const score = cosineSimilarity(vectors[i], vectors[j]);
+      console.log(`    (${i + 1}) × (${j + 1}) = ${score.toFixed(4)}`);
+    }
+  }
+  console.log();
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
